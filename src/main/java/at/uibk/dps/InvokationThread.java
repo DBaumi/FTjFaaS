@@ -7,6 +7,9 @@ import at.uibk.dps.function.Function;
 import at.uibk.dps.util.Event;
 import at.uibk.dps.util.Type;
 import com.amazonaws.regions.Regions;
+import jContainer.invoker.ContainerInvoker;
+import jContainer.invoker.EcsContainerInvoker;
+import jContainer.invoker.LocalContainerInvoker;
 import jFaaS.invokers.*;
 import jFaaS.utils.PairResult;
 import org.slf4j.Logger;
@@ -80,6 +83,12 @@ public class InvokationThread implements Runnable {
 			return "google";
 		} else if (functionURL.contains("azurewebsites.net")) {
 			return "azure";
+		} else if (functionURL.contains("container")) {
+			if(functionURL.contains("ecs"))
+				return "container-ecs";
+
+			if(functionURL.contains("local"))
+				return "container-local";
 		}
 
 		// Inform Scheduler Provider Detection Failed
@@ -182,7 +191,7 @@ public class InvokationThread implements Runnable {
 		} catch (Exception e) {
 			end = System.currentTimeMillis();
 			result = null;
-			logger.error("Invocation in " + thread.toString() + "failed! - Error:" + e.getMessage());
+			logger.error("Invocation in " + thread.toString() + "failed! - Error: " + e.getMessage());
 			MongoDBAccess.saveLog(Event.FUNCTION_FAILED, function.getUrl(), function.getDeployment(), function.getName(), function.getType(), result, end - start, false, function.getLoopCounter(), function.getMaxLoopCounter(), start, Type.EXEC);
 			exception = e;
 			finished = true;
@@ -262,6 +271,23 @@ public class InvokationThread implements Runnable {
 				if (!cancel) {
 					AzureMonitor azureMonitor = new AzureMonitor();
 					return azureMonitor.monitoredInvoke(azureInvoker, function);
+				} else {
+					throw new CancelInvokeException();
+				}
+			/* another provider case for the jContainer */
+			case "container-ecs":
+				ContainerInvoker ecsContainerInvoker = new EcsContainerInvoker();
+				if (!cancel) {
+					EcsMonitor ecsMonitor = new EcsMonitor();
+					return ecsMonitor.monitoredInvoke(ecsContainerInvoker, function);
+				} else {
+					throw new CancelInvokeException();
+				}
+			case "container-local":
+				ContainerInvoker localContainerInvoker = new LocalContainerInvoker();
+				if (!cancel) {
+					LocalMonitor localMonitor = new LocalMonitor();
+					return localMonitor.monitoredInvoke(localContainerInvoker, function);
 				} else {
 					throw new CancelInvokeException();
 				}
